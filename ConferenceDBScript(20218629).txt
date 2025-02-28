@@ -1,0 +1,369 @@
+DROP DATABASE IF EXISTS conferenceDB;
+CREATE DATABASE conferenceDB;
+USE conferenceDB;
+
+
+-- 1) STRONG ENTITIES
+
+
+-- ATTENDEE (superclass of Student, Professional, Sponsor, Speaker)
+CREATE TABLE Attendee (
+  attendee_id INT NOT NULL,
+  fname       VARCHAR(50),
+  lname       VARCHAR(50),
+  fee         DECIMAL(8,2),
+  PRIMARY KEY (attendee_id)
+);
+
+-- MEMBER (for subcommittees)
+CREATE TABLE Member (
+  member_id INT NOT NULL,
+  fname     VARCHAR(50),
+  lname     VARCHAR(50),
+  PRIMARY KEY (member_id)
+);
+
+-- ROOM (for Student assignments)
+CREATE TABLE Room (
+  room_number INT NOT NULL,
+  num_beds    INT NOT NULL,
+  PRIMARY KEY (room_number)
+);
+
+CREATE TABLE Company (
+  company_name VARCHAR(100) NOT NULL,
+  sponsorship_level VARCHAR(50),
+  num_emails_set INT,
+  PRIMARY KEY (company_name)
+);
+
+
+-- 2) SUBCOMMITTEE (strong entity, but with a 1:1 'Chair' relationship to Member)
+
+
+CREATE TABLE Subcommittee (
+  subcommittee_name VARCHAR(50) NOT NULL,
+  chair_id          INT NOT NULL,  -- Each subcommittee has exactly one Chair
+  PRIMARY KEY (subcommittee_name),
+  FOREIGN KEY (chair_id) 
+    REFERENCES Member(member_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
+);
+
+
+-- 3) SUBCLASS TABLES (Method 1: each subclass has same PK as Attendee)
+
+
+-- Student
+CREATE TABLE Student (
+  student_id  INT NOT NULL,
+  room_number INT NOT NULL,
+  PRIMARY KEY (student_id),
+  FOREIGN KEY (student_id) 
+    REFERENCES Attendee(attendee_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  FOREIGN KEY (room_number) -- Step 6) Multiple Students belong in a room
+    REFERENCES Room(room_number)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
+);
+
+-- Professional
+CREATE TABLE Professional (
+  professional_id INT NOT NULL,
+  PRIMARY KEY (professional_id),
+  FOREIGN KEY (professional_id) 
+    REFERENCES Attendee(attendee_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+-- Speaker
+CREATE TABLE Speaker (
+  speaker_id INT NOT NULL,
+  PRIMARY KEY (speaker_id),
+  FOREIGN KEY (speaker_id) 
+    REFERENCES Attendee(attendee_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+-- Sponsor is defined later due to it's 1:N Relationship with Company
+
+
+-- 4) MANY-TO-MANY RELATIONSHIP
+
+-- Between Subcommittee and Member for "members"
+-- Assuming members can belong to multiple subcommittees
+-- (We already used a 1:1 for the "Chair")
+
+CREATE TABLE HasSubCommitteeMembers (
+  subcommittee_name VARCHAR(50) NOT NULL,
+  member_id         INT NOT NULL,
+  PRIMARY KEY (subcommittee_name, member_id),
+  FOREIGN KEY (subcommittee_name)
+    REFERENCES Subcommittee(subcommittee_name)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  FOREIGN KEY (member_id)
+    REFERENCES Member(member_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+-- 5) ONE-TO-MANY RELATIONSHIPS
+
+-- Company -> Sponsor (1 Sponsor can represent many Companies)
+-- Company -> JobAd (1 Company can post many JobAds)
+-- Room -> Students (1 Room can house multiple students) [Already implemented previously with Student Table]
+
+-- Sponsor
+CREATE TABLE Sponsor (
+  sponsor_id INT NOT NULL,
+  company_name VARCHAR(100) NOT NULL, -- referecing N relationship with Company
+  PRIMARY KEY (sponsor_id),
+  FOREIGN KEY (sponsor_id) 
+    REFERENCES Attendee(attendee_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  FOREIGN KEY (company_name) 
+    REFERENCES Company(company_name)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+-- Job Advert
+CREATE TABLE JobAd (
+  job_title    VARCHAR(100) NOT NULL,
+  pay_rate     DECIMAL(10,2),
+  duration     VARCHAR(50),
+  province     VARCHAR(50),
+  city         VARCHAR(50),
+  company_name VARCHAR(100) NOT NULL,
+  PRIMARY KEY (job_title),
+  FOREIGN KEY (company_name)
+    REFERENCES Company(company_name)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+-- 6) ONE-TO-ONE RELATIONSHIPS
+
+CREATE TABLE Sessions (
+  session_name  VARCHAR(100) NOT NULL,
+  room_location VARCHAR(100) NOT NULL,
+  session_date  DATE NOT NULL,
+  start_time    TIME NOT NULL,
+  end_time      TIME NOT NULL,
+  speaker_id    INT NOT NULL,  -- foreign key to which Speaker is giving session
+  PRIMARY KEY (session_name),
+  FOREIGN KEY (speaker_id)
+    REFERENCES Speaker(speaker_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+-- 7) MULTI-VALUED ATTRIBUTES/RELATIONSHIPS
+
+-- Multi-valued attribute "emails" for Company (sends relationship)
+CREATE TABLE SendsCompanyEmails (
+  company_name VARCHAR(100) NOT NULL,
+  email        VARCHAR(100) NOT NULL,
+  recipient_id INT NOT NULL,
+  PRIMARY KEY (company_name, email, recipient_id),
+  FOREIGN KEY (company_name)
+    REFERENCES Company(company_name)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  FOREIGN KEY (recipient_id)
+    REFERENCES Attendee(attendee_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+
+
+-- INSERT SAMPLE DATA
+
+
+-- 1) ATTENDEEs
+INSERT INTO Attendee (attendee_id, fname, lname, fee)
+VALUES
+( 1, 'Emily',     'Wong',       50.00),   -- Students
+( 2, 'David',     'Johnson',    50.00),
+( 3, 'Sofia',     'Martinez',   50.00),
+( 4, 'Michael',   'Brown',      50.00),
+( 5, 'Lily',      'Chen',       50.00),
+( 6, 'Noah',      'Peterson',   50.00),
+
+( 7, 'Alice',     'Reed',       100.00),  -- Professionals
+( 8, 'John',      'Turner',     100.00),
+( 9, 'Marco',     'Mendes',     100.00),
+(10, 'Caroline',  'Scott',      100.00),
+(11, 'Zara',      'Smith',      100.00),
+(12, 'Brandon',   'Lee',        100.00),
+
+(13, 'Jessica',   'Adams',      0.00),    -- Sponsors (attend for free)
+(14, 'Oliver',    'Park',       0.00),
+(15, 'Vanessa',   'Green',      0.00),
+(16, 'Seth',      'Morgan',     0.00),
+(17, 'Bianca',    'Rivera',     0.00),
+(18, 'Ethan',     'Collins',    0.00),
+
+(19, 'Daniel',    'Fox',        0.00),  -- Speakers (assuming they attend for free)
+(20, 'Sandra',    'Hughes',     0.00),
+(21, 'Ryan',      'Cole',       0.00),
+(22, 'Paige',     'Armstrong',  0.00),
+(23, 'Willow',    'Hayes',      0.00),
+(24, 'Frank',     'Perez',      0.00);
+
+
+-- 2) MEMBER
+INSERT INTO Member (member_id, fname, lname) VALUES
+(101, 'John',   'Smith'),
+(102, 'Jane',   'Doe'),
+(103, 'Paul',   'Brown'),
+(104, 'Emily',  'Clark'),
+(105, 'David',  'Johnson'),
+(106, 'Amy',    'Miller');
+
+
+-- 3) ROOM
+INSERT INTO Room (room_number, num_beds) VALUES
+(201, 2),
+(202, 2),
+(203, 2),
+(204, 2),
+(205, 3),
+(206, 4);
+
+-- 4) COMPANY
+INSERT INTO Company (company_name, sponsorship_level, num_emails_set) VALUES
+('Alpha Co',        'Gold',      4),
+('Beta Inc',        'Silver',    2),
+('Gamma LLC',       'Bronze',    2),
+('Delta Tech',      'Platinum',  5),
+('Epsilon Works',   'Gold',      4),
+('Zeta Group',      'Silver',    6);
+
+-- 5) SUBCOMMITTEE
+INSERT INTO Subcommittee (subcommittee_name, chair_id) VALUES
+('Planning',     101),
+('Logistics',    102),
+('Marketing',    103),
+('Operations',   104),
+('Finance',      105),
+('Publicity',    106);
+
+-- 6) STUDENT
+--    student_id must exist in Attendee; room_number must exist in Room
+INSERT INTO Student (student_id, room_number) VALUES
+(1,  201),
+(2,  202),
+(3,  203),
+(4,  204),
+(5,  205),
+(6,  206);
+
+
+-- 7) PROFESSIONAL
+INSERT INTO Professional (professional_id) VALUES
+(7),
+(8),
+(9),
+(10),
+(11),
+(12);
+
+-- 8) SPONSOR
+INSERT INTO Sponsor (sponsor_id, company_name) VALUES
+(13, 'Alpha Co'),
+(14, 'Beta Inc'),
+(15, 'Gamma LLC'),
+(16, 'Delta Tech'),
+(17, 'Epsilon Works'),
+(18, 'Zeta Group');
+
+-- 9) SPEAKER
+INSERT INTO Speaker (speaker_id) VALUES
+(19),
+(20),
+(21),
+(22),
+(23),
+(24);
+
+-- 10) HAS-SUBCOMMITTEE-MEMBERS
+INSERT INTO HasSubCommitteeMembers (subcommittee_name, member_id) VALUES
+('Planning',   102),
+('Planning',   103),
+('Logistics',  101),
+('Marketing',  104),
+('Operations', 105),
+('Operations', 106),
+('Finance',    102),
+('Publicity',  103);
+
+-- 11) JOBAD
+--     references company_name from Company
+INSERT INTO JobAd (job_title, pay_rate, duration, province, city, company_name) VALUES
+('Software Engineer',   85000.00, 'Full-time', 'Ontario',  'Toronto',    'Alpha Co'),
+('Data Analyst',        60000.00, 'Part-time', 'BC',       'Vancouver',  'Beta Inc'),
+('Project Manager',     90000.00, 'Full-time', 'Alberta',  'Calgary',    'Gamma LLC'),
+('SysAdmin',            65000.00, 'Full-time', 'Ontario',  'Ottawa',     'Delta Tech'),
+('Marketing Intern',    40000.00, 'Contract',  'Quebec',   'Montreal',   'Epsilon Works'),
+('HR Specialist',       70000.00, 'Full-time', 'Manitoba', 'Winnipeg',   'Zeta Group');
+
+-- 12) SESSION
+--     references speaker_id from Speaker
+INSERT INTO Sessions (session_name, room_location, session_date, start_time, end_time, speaker_id) VALUES
+('Opening Keynote',      'Main Hall', '2026-07-01', '09:00:00', '10:00:00', 19),
+('Cloud Overview',       'Room A',    '2026-07-01', '10:15:00', '11:15:00', 20),
+('AI Trends',            'Room B',    '2026-07-02', '09:00:00', '10:00:00', 21),
+('Big Data 101',         'Room C',    '2026-07-02', '10:15:00', '11:15:00', 22),
+('Security BestPractices','Main Hall','2026-07-03', '09:00:00', '10:00:00', 23),
+('Closing Remarks',      'Room A',    '2026-07-03', '10:15:00', '11:15:00', 24);
+
+-- 13) COMPANYEMAILS
+--     references company_name from Company
+--     references recipient_id to multiple Attendees
+INSERT INTO SendsCompanyEmails (company_name, email, recipient_id)
+VALUES
+  -- ALPHA CO: 4 emails
+  ('Alpha Co', 'info@alpha.co', 1),
+  ('Alpha Co', 'info@alpha.co', 2),
+  ('Alpha Co', 'info@alpha.co', 3),
+  ('Alpha Co', 'hr@alpha.co',   4),
+
+  -- BETA INC: 2 emails
+  ('Beta Inc', 'contact@beta.com',   3),
+  ('Beta Inc', 'sales@beta.com',     5),
+
+  -- GAMMA LLC: 2 emails
+  ('Gamma LLC','sales@gammallc.com', 4),
+  ('Gamma LLC','sales@gammallc.com', 5),
+
+  -- DELTA TECH: 5 emails
+  ('Delta Tech','help@delta.com',    2),
+  ('Delta Tech','info@delta.com',    3),
+  ('Delta Tech','sales@delta.com',   6),
+  ('Delta Tech','tech@delta.com',    7),
+  ('Delta Tech','jobs@delta.com',    8),
+
+  -- EPSILON WORKS: 4 emails
+  ('Epsilon Works','help@epsilon.com',     5),
+  ('Epsilon Works','info@epsilon.com',     9),
+  ('Epsilon Works','support@epsilon.com', 10),
+  ('Epsilon Works','business@epsilon.com',11),
+
+  -- ZETA GROUP: 6 emails
+  ('Zeta Group','office@zeta.com',      6),
+  ('Zeta Group','office@zeta.com',      12),
+  ('Zeta Group','hr@zeta.com',          13),
+  ('Zeta Group','support@zeta.com',     14),
+  ('Zeta Group','accounting@zeta.com',  15),
+  ('Zeta Group','marketing@zeta.com',   16);
+
+-- End of Script
